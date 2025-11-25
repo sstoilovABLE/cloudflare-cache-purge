@@ -1,5 +1,7 @@
 # Cloudflare Purge Tool - Secure Windows Guide
 
+AI Usage Disclaimer: This script was written with the help of Perplexity AI, using the Gemini 3 Pro, Claude 4.5 Haiku and OpenAI GPT 5.1 models. 
+
 This guide explains how to use the `purge-cf-cache.ps1` script to securely manage and purge your Cloudflare cache from the command line.
 
 The script securely stores your Cloudflare **API Token** and **Zone ID** together under a friendly name (like "my-blog") in the Windows Credential Manager.
