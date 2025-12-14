@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 param(
-    [ValidateSet('SaveConfig', 'PurgeAll', 'PurgeUrls', 'PurgeTags', 'Verify', 'ListConfigs', 'RevealToken')]
+    [ValidateSet('SaveConfig', 'PurgeAll', 'PurgeUrls', 'PurgeTags', 'Verify', 'ListConfigs', 'RevealToken', 'RemoveConfig')]
     [string]$Action = 'PurgeAll',
     [string]$FriendlyName,
     [string]$ZoneId,
@@ -9,6 +9,7 @@ param(
     , [switch]$CopyToClipboard
     , [switch]$ShowToken
     , [switch]$ShowZone
+    , [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -92,7 +93,13 @@ function List-StoredConfigs {
                     if ($json -is [System.Security.SecureString]) {
                         $json = (New-Object System.Net.NetworkCredential("", $json)).Password
                     }
-                    $obj = $json | ConvertFrom-Json
+                    try {
+                        $obj = $json | ConvertFrom-Json
+                    } catch {
+                        # Not JSON - fall back to treating the stored string as a token (ZoneId unknown)
+                        $obj = [PSCustomObject]@{ Token = $json; ZoneId = $null }
+                    }
+
                     [PSCustomObject]@{
                         FriendlyName = $t -replace "^$prefix",""
                         ZoneId = if ($ShowZone) { $obj.ZoneId } else { if ($obj.ZoneId -and $obj.ZoneId.Length -gt 6) { $obj.ZoneId.Substring(0,6) + '...' } else { $obj.ZoneId } }
@@ -103,13 +110,17 @@ function List-StoredConfigs {
             }
         }
 
-        $results | Format-Table -AutoSize
+        # Return objects so callers/tests can capture results
+        $results
     } else {
         Write-Warning "CredentialManager cmdlets not available in this shell; showing friendly names only. Use Windows PowerShell or install the CredentialManager module to reveal zones or tokens."
+        $friendlyNames = @()
         foreach ($t in $targets) {
-            Write-Host ($t -replace "^$prefix",
-                "") -ForegroundColor Cyan
+            $n = $t -replace "^$prefix",""
+            $friendlyNames += $n
+            Write-Host $n -ForegroundColor Cyan
         }
+        return $friendlyNames
     }
 }
 
@@ -154,6 +165,71 @@ function Reveal-StoredToken {
 
     # Explicit printing
     Write-Host "Token (plaintext): $($c.Token)" -ForegroundColor Red
+}
+
+function Remove-StoredConfig {
+    param(
+        [Parameter(Mandatory=$true)][string]$FriendlyName,
+        [switch]$Force
+    )
+
+    if (-not $FriendlyName) { throw "FriendlyName is required" }
+
+    if (-not $Force) {
+        # Interactive flow: require presence and typed confirmation
+        Assert-UserPresence
+        $confirmation = Read-Host -Prompt "Type the friendly name '$FriendlyName' to confirm deletion (or press Enter to cancel)"
+        if ($confirmation -ne $FriendlyName) { throw "Confirmation mismatch - aborting." }
+    } else {
+        # Non-interactive: try presence check but don't fail if unavailable
+        try { Assert-UserPresence } catch { Write-Warning "User presence verification failed/ignored due to -Force: $_" }
+    }
+
+    $target = "$CredPrefix$FriendlyName"
+    $deleted = $false
+
+    # Prefer using module cmdlet when available
+    if (Get-Command -Name Remove-StoredCredential -ErrorAction SilentlyContinue) {
+        try {
+            Remove-StoredCredential -Target $target -ErrorAction Stop
+            $deleted = $true
+        } catch {
+            Write-Warning "Remove-StoredCredential failed: $_"
+        }
+    }
+
+    if (-not $deleted) {
+        try {
+            cmdkey /delete:"$target" 2>&1 | Out-Null
+            $deleted = $true
+        } catch {
+            Write-Warning "cmdkey delete failed: $_"
+        }
+    }
+
+    # Verify deletion
+    $stillExists = $false
+    if (Get-Command -Name Get-StoredCredential -ErrorAction SilentlyContinue) {
+        try {
+            $s = Get-StoredCredential -Target $target -ErrorAction SilentlyContinue
+            if ($s) { $stillExists = $true }
+        } catch { $stillExists = $true }
+    } else {
+        try {
+            $cmdRaw = cmdkey /list 2>&1
+            foreach ($line in $cmdRaw) {
+                if ($line -match '^[ \t]*Target:\s*(.+)$') {
+                    $raw = $Matches[1].Trim()
+                    if ($raw -match 'target=(.+)$') { $t = $Matches[1].Trim() } else { $t = $raw }
+                    if ($t -eq $target) { $stillExists = $true; break }
+                }
+            }
+        } catch { }
+    }
+
+    if ($stillExists) { throw "Failed to remove '$FriendlyName' ($target); still present." }
+
+    Write-Host "Removed '$FriendlyName' successfully." -ForegroundColor Green
 }
 
 function Invoke-CFRequest {
@@ -220,6 +296,10 @@ if ($MyInvocation.InvocationName -ne '.') {
     'RevealToken' {
         if (-not $FriendlyName) { throw "-FriendlyName is required for RevealToken" }
         Reveal-StoredToken -FriendlyName $FriendlyName -CopyToClipboard:$CopyToClipboard -ShowToken:$ShowToken
+    }
+    'RemoveConfig' {
+        if (-not $FriendlyName) { throw "-FriendlyName is required for RemoveConfig" }
+        Remove-StoredConfig -FriendlyName $FriendlyName -Force:$Force
     }
     default { throw "Unknown Action" }
     }

@@ -84,6 +84,12 @@ You can list the friendly names you have saved and reveal the API token (securel
 
 **PowerShell compatibility:** Some Credential Manager cmdlets are implemented only for Windows PowerShell / .NET Framework and may not be available in PowerShell Core (`pwsh`). If you see a warning about `CredentialManager` cmdlets when running `ListConfigs` or `RevealToken`, try running the command from Windows PowerShell (`powershell.exe`) or install a compatible `CredentialManager` module for your environment. In PowerShell 7, install and import the supported TUN.CredentialManager module. 
 
+**Remove a saved config:** You can safely remove a stored configuration using the `RemoveConfig` action. By default the command will require verification (Windows Hello when available and a typed confirmation). Use `-Force` for non-interactive automation; the script will attempt a presence check but will not fail if Windows Hello isn’t available in that environment.
+
+```powershell
+.\purge-cf-cache.ps1 -Action RemoveConfig -FriendlyName "my-blog.bg" -Force
+```
+
 
 ***
 

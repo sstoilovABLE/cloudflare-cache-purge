@@ -18,21 +18,53 @@ $sec = ConvertTo-SecureString $payload -AsPlainText -Force
 
 try {
     # Prefer to use CredentialManager's New-StoredCredential when available (works on Windows PowerShell)
+    $created = $false
+    $createdWithModule = $false
     if (Get-Command -Name New-StoredCredential -ErrorAction SilentlyContinue) {
-        New-StoredCredential -Target ("CloudflarePurgeTool:$testName") -Credential (New-Object System.Management.Automation.PSCredential("CF", $sec)) -Type Generic -Persist LocalMachine | Out-Null
-        Write-Host "Created test credential via New-StoredCredential: $testName" -ForegroundColor Green
-    } else {
-        Write-Host "New-StoredCredential not available in this environment; skipping automated credential creation. Skipping remainder of test." -ForegroundColor Yellow
-        exit 0
+        try {
+            New-StoredCredential -Target ("CloudflarePurgeTool:$testName") -Credential (New-Object System.Management.Automation.PSCredential("CF", $sec)) -Type Generic -Persist LocalMachine | Out-Null
+            Write-Host "Created test credential via New-StoredCredential: $testName" -ForegroundColor Green
+            $created = $true
+            $createdWithModule = $true
+        } catch {
+            Write-Warning "New-StoredCredential invocation failed: $_"
+        }
+    }
+
+    if (-not $created) {
+        # Try cmdkey fallback (best-effort) with a simple password string; if that fails, skip the test gracefully.
+        try {
+            $simplePass = "test-pass-$([guid]::NewGuid().ToString())"
+            cmdkey /generic:"CloudflarePurgeTool:$testName" /user:CF /pass:$simplePass 2>&1 | Out-Null
+            Write-Host "Created test credential via cmdkey: $testName" -ForegroundColor Green
+            $created = $true
+        } catch {
+            Write-Host "Failed to create credential via New-StoredCredential and cmdkey; skipping remainder of test." -ForegroundColor Yellow
+            exit 0
+        }
     }
 
     # List and assert presence
     $list = List-StoredConfigs -ShowZone
-    if ($list -match $testName) { Write-Host "ListConfigs contains $testName" -ForegroundColor Green } else { Write-Host "ListConfigs did NOT find $testName" -ForegroundColor Red; exit 1 }
+    $names = @()
+    if ($list) { $names = $list | ForEach-Object { if ($_ -is [string]) { $_ } else { $_.FriendlyName } } }
+    if ($names -contains $testName) { Write-Host "ListConfigs contains $testName" -ForegroundColor Green } else { Write-Host "ListConfigs did NOT find $testName" -ForegroundColor Red; exit 1 }
 
-    # Get stored config directly
-    $cfg = Get-StoredConfig -FriendlyName $testName
-    if ($cfg.ZoneId -and $cfg.Token) { Write-Host "Get-StoredConfig returned object for $testName" -ForegroundColor Green } else { Write-Host "Get-StoredConfig failed" -ForegroundColor Red; exit 1 }
+    # Get stored config directly (only if created via CredentialManager module)
+    if ($createdWithModule) {
+        $cfg = Get-StoredConfig -FriendlyName $testName
+        if ($cfg.ZoneId -and $cfg.Token) { Write-Host "Get-StoredConfig returned object for $testName" -ForegroundColor Green } else { Write-Host "Get-StoredConfig failed" -ForegroundColor Red; exit 1 }
+    } else {
+        Write-Host "Skipped Get-StoredConfig - credential created via cmdkey fallback." -ForegroundColor Yellow
+    }
+
+    # Remove using our script function (non-interactive)
+    Remove-StoredConfig -FriendlyName $testName -Force
+    # Verify it's gone
+    $listAfter = List-StoredConfigs -ShowZone
+    $namesAfter = @()
+    if ($listAfter) { $namesAfter = $listAfter | ForEach-Object { if ($_ -is [string]) { $_ } else { $_.FriendlyName } } }
+    if ($namesAfter -contains $testName) { Write-Host "Remove-StoredConfig failed - $testName still present" -ForegroundColor Red; exit 1 } else { Write-Host "Remove-StoredConfig removed $testName" -ForegroundColor Green }
 
     Write-Host "Integration smoke test passed." -ForegroundColor Green
 } finally {
