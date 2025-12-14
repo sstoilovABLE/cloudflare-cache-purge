@@ -64,6 +64,26 @@ You can check if a configuration is stored correctly at any time.
 .\purge-cf-cache.ps1 -Action Verify -FriendlyName "my-blog.bg"
 ```
 
+### 5. Manage saved configurations
+
+You can list the friendly names you have saved and reveal the API token (securely) when needed.
+
+**List saved configs (friendly name + masked ZoneId):**
+
+```powershell
+.\purge-cf-cache.ps1 -Action ListConfigs -FriendlyName any
+```
+
+**Reveal a token securely (Windows Hello + typed confirmation). By default the token is masked; use `-CopyToClipboard` to copy it instead of printing:**
+
+```powershell
+.\purge-cf-cache.ps1 -Action RevealToken -FriendlyName "my-blog.bg" -CopyToClipboard
+```
+
+**Notes:** Prefer `-CopyToClipboard` rather than printing the token to the console. The script will require verification via Windows Hello when available and will prompt for a typed confirmation as a fallback.
+
+**PowerShell compatibility:** Some Credential Manager cmdlets are implemented only for Windows PowerShell / .NET Framework and may not be available in PowerShell Core (`pwsh`). If you see a warning about `CredentialManager` cmdlets when running `ListConfigs` or `RevealToken`, try running the command from Windows PowerShell (`powershell.exe`) or install a compatible `CredentialManager` module for your environment. In PowerShell 7, install and import the supported TUN.CredentialManager module. 
+
 
 ***
 
@@ -131,3 +151,14 @@ When creating your Cloudflare API token, use the "Edit" template for "Cache Purg
 
 * **Permissions**: `Zone` | `Cache Purge` | `Edit`
 * **Zone Resources**: `Include` | `Specific zone` | `your-domain.com`
+
+## Testing
+
+There's a small integration smoke test script that creates a temporary credential, verifies listing and retrieval, and then removes it:
+
+```powershell
+.
+	ests\integration.ps1
+```
+
+Note: This test requires the `CredentialManager` module and will not exercise interactive Windows Hello confirmations (it verifies non-interactive code paths).
