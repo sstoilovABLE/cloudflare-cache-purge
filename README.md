@@ -1,6 +1,6 @@
 # Cloudflare Purge Tool - Secure Windows Guide
 
-AI Usage Disclaimer: This script was written with the help of Perplexity AI, using the Gemini 3 Pro, Claude 4.5 Haiku and OpenAI GPT 5.1 models. 
+AI Usage Disclaimer: This script was written with the help of Perplexity AI, using the Gemini 3 Pro, Claude 4.5 Haiku and OpenAI GPT 5.1 models, and GitHub Copilot inside of VS Code, using the Raptor mini (Preview) model, and others. 
 
 This guide explains how to use the `purge-cf-cache.ps1` script to securely manage and purge your Cloudflare cache from the command line.
 
