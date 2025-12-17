@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 param(
-    [ValidateSet('SaveConfig', 'PurgeAll', 'PurgeUrls', 'PurgeTags', 'Verify', 'ListConfigs', 'RevealToken', 'RemoveConfig')]
-    [string]$Action = 'PurgeAll',
+    [ValidateSet('SaveConfig', 'PurgeAll', 'PurgeUrls', 'PurgeTags', 'Verify', 'ListConfigs', 'RevealToken', 'RemoveConfig', 'Help')]
+    [string]$Action,
     [string]$FriendlyName,
     [string]$ZoneId,
     [string[]]$Urls,
@@ -34,7 +34,7 @@ function Assert-UserPresence {
             while ($asyncOp.Status -eq "Started") { Start-Sleep -Milliseconds 100 }
             
             if ($asyncOp.GetResults() -ne "Verified") { 
-                throw "ACCESS DENIED: User verification failed or was cancelled." 
+                throw "ACCESS DENIED: User verification failed or was cancelled. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions."
             }
             Write-Host "✓ Verified" -ForegroundColor Green
         }
@@ -43,14 +43,44 @@ function Assert-UserPresence {
     }
 }
 
+function Show-Help {
+    Write-Host "`nCloudflare Cache Purge Tool" -ForegroundColor Yellow
+    Write-Host "`nA script to securely store Cloudflare API tokens and Zone IDs in Windows Credential Manager and use them to purge the cache."
+
+    Write-Host "`nUSAGE:" -ForegroundColor Yellow
+    Write-Host "    .\purge-cf-cache.ps1 -Action <ActionName> [Parameters...]" -ForegroundColor Cyan
+
+    Write-Host "`nACTIONS:" -ForegroundColor Yellow
+
+    $actions = @(
+        @{ Name = 'SaveConfig';   Description = 'Securely save a new site configuration (API Token and Zone ID).'; Example = '.\purge-cf-cache.ps1 -Action SaveConfig -FriendlyName "my-site" -ZoneId "your_zone_id"' }
+        @{ Name = 'PurgeAll';     Description = 'Purge the entire cache for a stored site.'; Example = '.\purge-cf-cache.ps1 -Action PurgeAll -FriendlyName "my-site"' }
+        @{ Name = 'PurgeUrls';    Description = 'Purge specific URLs.'; Example = '.\purge-cf-cache.ps1 -Action PurgeUrls -FriendlyName "my-site" -Urls @("https://example.com/page1", "https://example.com/page2")' }
+        @{ Name = 'PurgeTags';    Description = 'Purge cache by specific tags.'; Example = '.\purge-cf-cache.ps1 -Action PurgeTags -FriendlyName "my-site" -Tags @("tag1", "tag2")' }
+        @{ Name = 'Verify';       Description = 'Check if a configuration is stored correctly.'; Example = '.\purge-cf-cache.ps1 -Action Verify -FriendlyName "my-site"' }
+        @{ Name = 'ListConfigs';  Description = 'List all saved friendly names.'; Example = '.\purge-cf-cache.ps1 -Action ListConfigs' }
+        @{ Name = 'RevealToken';  Description = 'Securely reveal a stored API token. Requires user presence verification.'; Example = '.\purge-cf-cache.ps1 -Action RevealToken -FriendlyName "my-site" -CopyToClipboard' }
+        @{ Name = 'RemoveConfig'; Description = 'Remove a saved configuration.'; Example = '.\purge-cf-cache.ps1 -Action RemoveConfig -FriendlyName "my-site"' }
+        @{ Name = 'Help';         Description = 'Display this help message.'; Example = '.\purge-cf-cache.ps1 -Action Help' }
+    )
+
+    foreach ($action in $actions) {
+        Write-Host ""
+        Write-Host ("    {0,-15} - {1}" -f $action.Name, $action.Description) -ForegroundColor Cyan
+        Write-Host ("                      Example: {0}" -f $action.Example) -ForegroundColor Gray
+    }
+
+    Write-Host "`nFor more detailed information, please see the README.md file."
+}
+
 function Get-StoredConfig {
     param([Parameter(Mandatory=$true)][string]$FriendlyName)
 
-    if (-not (Get-Module -ListAvailable "CredentialManager")) { throw "Install 'CredentialManager' module first." }
+    if (-not (Get-Module -ListAvailable "CredentialManager")) { throw "Install 'CredentialManager' module first. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
 
     # Retrieve raw credential object
     $cred = Get-StoredCredential -Target "$CredPrefix$FriendlyName"
-    if (-not $cred) { throw "Config '$FriendlyName' not found. Run with -Action SaveConfig first." }
+    if (-not $cred) { throw "Config '$FriendlyName' not found. Run with -Action SaveConfig first. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
 
     $secret = $cred.Password
 
@@ -136,10 +166,10 @@ function Reveal-StoredToken {
 
     # Fallback typed confirmation when Windows Hello isn't present/verified
     $confirmation = Read-Host -Prompt "Type the friendly name '$FriendlyName' to confirm you want to reveal the token (or press Enter to cancel)"
-    if ($confirmation -ne $FriendlyName) { throw "Confirmation mismatch - aborting." }
+    if ($confirmation -ne $FriendlyName) { throw "Confirmation mismatch - aborting. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
 
     $c = Get-StoredConfig -FriendlyName $FriendlyName
-    if (-not $c) { throw "Config not found" }
+    if (-not $c) { throw "Config not found. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
 
     if ($CopyToClipboard) {
         try {
@@ -173,13 +203,13 @@ function Remove-StoredConfig {
         [switch]$Force
     )
 
-    if (-not $FriendlyName) { throw "FriendlyName is required" }
+    if (-not $FriendlyName) { throw "FriendlyName is required. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
 
     if (-not $Force) {
         # Interactive flow: require presence and typed confirmation
         Assert-UserPresence
         $confirmation = Read-Host -Prompt "Type the friendly name '$FriendlyName' to confirm deletion (or press Enter to cancel)"
-        if ($confirmation -ne $FriendlyName) { throw "Confirmation mismatch - aborting." }
+        if ($confirmation -ne $FriendlyName) { throw "Confirmation mismatch - aborting. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
     } else {
         # Non-interactive: try presence check but don't fail if unavailable
         try { Assert-UserPresence } catch { Write-Warning "User presence verification failed/ignored due to -Force: $_" }
@@ -227,7 +257,7 @@ function Remove-StoredConfig {
         } catch { }
     }
 
-    if ($stillExists) { throw "Failed to remove '$FriendlyName' ($target); still present." }
+    if ($stillExists) { throw "Failed to remove '$FriendlyName' ($target); still present. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
 
     Write-Host "Removed '$FriendlyName' successfully." -ForegroundColor Green
 }
@@ -242,17 +272,22 @@ function Invoke-CFRequest {
             Write-Host "SUCCESS" -ForegroundColor Green
             if ($resp.result) { $resp.result | ConvertTo-Json -Depth 5 | Write-Host }
             else { Write-Host "Command completed successfully." -ForegroundColor Gray }
-        } else { throw "API Error: $($resp.errors | ConvertTo-Json -Depth 5)" }
+        } else { throw "API Error: $($resp.errors | ConvertTo-Json -Depth 5). Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
     } catch { Write-Error "Request Failed: $_"; exit 1 }
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
+    if (-not $Action) {
+        Show-Help
+        return
+    }
+
     Write-Host "`nCloudflare Tool: $Action ($FriendlyName)" -ForegroundColor Cyan
 
     switch ($Action) {
     'SaveConfig' {
-        if (-not $FriendlyName) { throw "-FriendlyName is required for SaveConfig" }
-        if (-not $ZoneId) { throw "-ZoneId is required" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for SaveConfig. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
+        if (-not $ZoneId) { throw "-ZoneId is required. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         
         # Use GUI prompt for secure token entry
         $credInput = Get-Credential -UserName "TokenInput" -Message "Paste your Cloudflare API Token as the Password"
@@ -265,28 +300,28 @@ if ($MyInvocation.InvocationName -ne '.') {
         Write-Host "Saved '$FriendlyName' securely." -ForegroundColor Green
     }
     'Verify' {
-        if (-not $FriendlyName) { throw "-FriendlyName is required for Verify" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for Verify. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         Assert-UserPresence
         $c = Get-StoredConfig -FriendlyName $FriendlyName
         Write-Host "Found Config -> Zone: $($c.ZoneId)" -ForegroundColor Green
     }
     'PurgeAll' {
-        if (-not $FriendlyName) { throw "-FriendlyName is required for PurgeAll" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for PurgeAll. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         Assert-UserPresence
         $c = Get-StoredConfig -FriendlyName $FriendlyName
         Invoke-CFRequest -Token $c.Token -ZId $c.ZoneId -Payload @{ purge_everything=$true }
     }
     'PurgeUrls' {
-        if (-not $Urls) { throw "-Urls required" }
+        if (-not $Urls) { throw "-Urls required. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         Assert-UserPresence
-        if (-not $FriendlyName) { throw "-FriendlyName is required for PurgeUrls" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for PurgeUrls. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         $c = Get-StoredConfig -FriendlyName $FriendlyName
         Invoke-CFRequest -Token $c.Token -ZId $c.ZoneId -Payload @{ files=$Urls }
     }
     'PurgeTags' {
-        if (-not $Tags) { throw "-Tags required" }
+        if (-not $Tags) { throw "-Tags required. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         Assert-UserPresence
-        if (-not $FriendlyName) { throw "-FriendlyName is required for PurgeTags" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for PurgeTags. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         $c = Get-StoredConfig -FriendlyName $FriendlyName
         Invoke-CFRequest -Token $c.Token -ZId $c.ZoneId -Payload @{ tags=$Tags }
     }
@@ -294,14 +329,17 @@ if ($MyInvocation.InvocationName -ne '.') {
         List-StoredConfigs -ShowZone:$ShowZone
     }
     'RevealToken' {
-        if (-not $FriendlyName) { throw "-FriendlyName is required for RevealToken" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for RevealToken. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         Reveal-StoredToken -FriendlyName $FriendlyName -CopyToClipboard:$CopyToClipboard -ShowToken:$ShowToken
     }
     'RemoveConfig' {
-        if (-not $FriendlyName) { throw "-FriendlyName is required for RemoveConfig" }
+        if (-not $FriendlyName) { throw "-FriendlyName is required for RemoveConfig. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
         Remove-StoredConfig -FriendlyName $FriendlyName -Force:$Force
     }
-    default { throw "Unknown Action" }
+    'Help' {
+        Show-Help
+    }
+    default { throw "Unknown Action. Run '.\purge-cf-cache.ps1 -Action Help' for usage instructions." }
     }
     Write-Host ""
 }
