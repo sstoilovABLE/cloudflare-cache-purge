@@ -49,6 +49,15 @@ Now you can purge cache without needing to look up the Zone ID or token again.
 .\purge-cf-cache.ps1 -Action PurgeUrls -FriendlyName "my-blog.bg" -Urls @("https://my-blog.bg/", "https://my-blog.bg/news/")
 ```
 
+### Get help
+
+If you want a quick reminder of the available actions and usage examples, run the script with the `Help` action:
+
+```powershell
+.\purge-cf-cache.ps1 -Action Help
+```
+This prints a short usage summary and the list of supported actions.
+
 **Purge by cache tags:**
 
 ```powershell
@@ -163,8 +172,7 @@ When creating your Cloudflare API token, use the "Edit" template for "Cache Purg
 There's a small integration smoke test script that creates a temporary credential, verifies listing and retrieval, and then removes it:
 
 ```powershell
-.
-	ests\integration.ps1
+.\tests\integration.ps1
 ```
 
 Note: This test requires the `CredentialManager` module and will not exercise interactive Windows Hello confirmations (it verifies non-interactive code paths).
