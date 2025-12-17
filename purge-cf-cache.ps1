@@ -44,45 +44,33 @@ function Assert-UserPresence {
 }
 
 function Show-Help {
-    Write-Host @"
-Cloudflare Cache Purge Tool
+    Write-Host "`nCloudflare Cache Purge Tool" -ForegroundColor Yellow
+    Write-Host "`nA script to securely store Cloudflare API tokens and Zone IDs in Windows Credential Manager and use them to purge the cache."
 
-A script to securely store Cloudflare API tokens and Zone IDs in Windows Credential Manager
-and use them to purge the cache.
+    Write-Host "`nUSAGE:" -ForegroundColor Yellow
+    Write-Host "    .\purge-cf-cache.ps1 -Action <ActionName> [Parameters...]" -ForegroundColor Cyan
 
-USAGE:
-    .\purge-cf-cache.ps1 -Action <ActionName> [Parameters...]
+    Write-Host "`nACTIONS:" -ForegroundColor Yellow
 
-ACTIONS:
-    SaveConfig      - Securely save a new site configuration (API Token and Zone ID).
-                      Example: .\purge-cf-cache.ps1 -Action SaveConfig -FriendlyName "my-site" -ZoneId "your_zone_id"
+    $actions = @(
+        @{ Name = 'SaveConfig';   Description = 'Securely save a new site configuration (API Token and Zone ID).'; Example = '.\purge-cf-cache.ps1 -Action SaveConfig -FriendlyName "my-site" -ZoneId "your_zone_id"' }
+        @{ Name = 'PurgeAll';     Description = 'Purge the entire cache for a stored site.'; Example = '.\purge-cf-cache.ps1 -Action PurgeAll -FriendlyName "my-site"' }
+        @{ Name = 'PurgeUrls';    Description = 'Purge specific URLs.'; Example = '.\purge-cf-cache.ps1 -Action PurgeUrls -FriendlyName "my-site" -Urls @("https://example.com/page1", "https://example.com/page2")' }
+        @{ Name = 'PurgeTags';    Description = 'Purge cache by specific tags.'; Example = '.\purge-cf-cache.ps1 -Action PurgeTags -FriendlyName "my-site" -Tags @("tag1", "tag2")' }
+        @{ Name = 'Verify';       Description = 'Check if a configuration is stored correctly.'; Example = '.\purge-cf-cache.ps1 -Action Verify -FriendlyName "my-site"' }
+        @{ Name = 'ListConfigs';  Description = 'List all saved friendly names.'; Example = '.\purge-cf-cache.ps1 -Action ListConfigs' }
+        @{ Name = 'RevealToken';  Description = 'Securely reveal a stored API token. Requires user presence verification.'; Example = '.\purge-cf-cache.ps1 -Action RevealToken -FriendlyName "my-site" -CopyToClipboard' }
+        @{ Name = 'RemoveConfig'; Description = 'Remove a saved configuration.'; Example = '.\purge-cf-cache.ps1 -Action RemoveConfig -FriendlyName "my-site"' }
+        @{ Name = 'Help';         Description = 'Display this help message.'; Example = '.\purge-cf-cache.ps1 -Action Help' }
+    )
 
-    PurgeAll        - Purge the entire cache for a stored site.
-                      Example: .\purge-cf-cache.ps1 -Action PurgeAll -FriendlyName "my-site"
+    foreach ($action in $actions) {
+        Write-Host ""
+        Write-Host ("    {0,-15} - {1}" -f $action.Name, $action.Description) -ForegroundColor Cyan
+        Write-Host ("                      Example: {0}" -f $action.Example) -ForegroundColor Gray
+    }
 
-    PurgeUrls       - Purge specific URLs.
-                      Example: .\purge-cf-cache.ps1 -Action PurgeUrls -FriendlyName "my-site" -Urls @("https://example.com/page1", "https://example.com/page2")
-
-    PurgeTags       - Purge cache by specific tags.
-                      Example: .\purge-cf-cache.ps1 -Action PurgeTags -FriendlyName "my-site" -Tags @("tag1", "tag2")
-
-    Verify          - Check if a configuration is stored correctly.
-                      Example: .\purge-cf-cache.ps1 -Action Verify -FriendlyName "my-site"
-
-    ListConfigs     - List all saved friendly names.
-                      Example: .\purge-cf-cache.ps1 -Action ListConfigs
-
-    RevealToken     - Securely reveal a stored API token. Requires user presence verification.
-                      Example: .\purge-cf-cache.ps1 -Action RevealToken -FriendlyName "my-site" -CopyToClipboard
-
-    RemoveConfig    - Remove a saved configuration.
-                      Example: .\purge-cf-cache.ps1 -Action RemoveConfig -FriendlyName "my-site"
-
-    Help            - Display this help message.
-                      Example: .\purge-cf-cache.ps1 -Action Help
-
-For more detailed information, please see the README.md file.
-"@
+    Write-Host "`nFor more detailed information, please see the README.md file."
 }
 
 function Get-StoredConfig {
