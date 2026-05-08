@@ -176,3 +176,13 @@ There's a small integration smoke test script that creates a temporary credentia
 ```
 
 Note: This test requires the `CredentialManager` module and will not exercise interactive Windows Hello confirmations (it verifies non-interactive code paths).
+
+## Contributing
+
+Feel free to fork this repository and improve on the script further!
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for full text.
+
+Copyright (c) 2026 Stoil M. Stoilov
